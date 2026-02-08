@@ -1,0 +1,5 @@
+byaldi
+pdf2image
+google-genai
+Pillow
+python-dotenv
