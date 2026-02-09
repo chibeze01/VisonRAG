@@ -1,37 +1,61 @@
-from byaldi import RAGMultiModalModel
-import os
+from __future__ import annotations
 
-def main():
-    # 1. Load the Model
-    # We use ColQwen2 because it's the current SOTA for visual retrieval
-    print("Loading ColQwen2 model (this may take a while the first time)...")
-    try:
-        # Note: on Windows without a GPU, this might be slow or require specific torch config.
-        # byaldi should handle basic CPU fallback if needed, but GPU is highly recommended.
-        # Explicitly force CPU because CUDA is not available
-        RAG = RAGMultiModalModel.from_pretrained("vidore/colqwen2-v1.0", device="cpu")
+import argparse
 
-        # 2. Index the PDF
-        # We'll use the sample.pdf provided by the user.
-        pdf_path = "Quarterly Letters - Jun 2025.pdf"
-        
-        if not os.path.exists(pdf_path):
-            print(f"Error: {pdf_path} not found. Please ensure the file exists in the directory.")
-            return
+from visionrag.config import Settings
+from visionrag.db.repository import StorageRepository
+from visionrag.logging_utils import configure_logging
+from visionrag.metrics import InMemoryMetrics
+from visionrag.providers.embedding import ColPaliEmbeddingProvider
+from visionrag.providers.page_resolver import PageResolver
+from visionrag.providers.s3_client import S3Client
+from visionrag.services.worker_service import IngestionWorker
 
-        print(f"Indexing {pdf_path}...")
-        # 'store_collection_with_index=True' saves the base64 images inside the index 
-        # so you don't have to re-open the PDF later.
-        RAG.index(
-            input_path=pdf_path,
-            index_name="vision_rag_index",
-            store_collection_with_index=True,
-            overwrite=True
-        )
 
-        print("Indexing complete. Saved to .byaldi/vision_rag_index")
-    except Exception as e:
-        print(f"An error occurred during indexing: {e}")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Queue and optionally process a PDF ingestion job from S3.")
+    parser.add_argument("--s3-key", required=True, help="S3 object key for the PDF.")
+    parser.add_argument("--s3-bucket", default=None, help="S3 bucket (uses DEFAULT_S3_BUCKET if omitted).")
+    parser.add_argument(
+        "--process-now",
+        action="store_true",
+        help="Process exactly one claimed job immediately (useful for local testing).",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    settings = Settings.from_env()
+    configure_logging(settings.log_level)
+
+    bucket = args.s3_bucket or settings.default_s3_bucket
+    if not bucket:
+        raise ValueError("s3_bucket must be provided via --s3-bucket or DEFAULT_S3_BUCKET.")
+
+    repository = StorageRepository(settings.postgres_dsn)
+    document = repository.upsert_document(s3_bucket=bucket, s3_key=args.s3_key, status="pending")
+    job = repository.create_ingestion_job(document.document_id)
+
+    print(f"Queued job_id={job.job_id} document_id={document.document_id} s3={bucket}/{args.s3_key}")
+
+    if not args.process_now:
+        return
+
+    s3_client = S3Client(region_name=settings.aws_region)
+    page_resolver = PageResolver(s3_client=s3_client, dpi=settings.render_dpi)
+    embedding_provider = ColPaliEmbeddingProvider(model_name=settings.model_name, device=settings.model_device)
+    worker = IngestionWorker(
+        settings=settings,
+        repository=repository,
+        embedding_provider=embedding_provider,
+        page_resolver=page_resolver,
+        s3_client=s3_client,
+        metrics=InMemoryMetrics(),
+    )
+    outcome = worker.run_once()
+    print(f"Processed: {outcome.processed} job_id={outcome.job_id}")
+
 
 if __name__ == "__main__":
     main()
