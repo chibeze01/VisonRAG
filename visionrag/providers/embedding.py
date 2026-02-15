@@ -95,10 +95,11 @@ class ColPaliEmbeddingProvider:
         assert self._torch is not None
 
         batch = self._processor.process_images([image])
+        batch_original = batch
         batch = self._to_device(batch)
         with self._torch.no_grad():
             output = self._model(**batch)
-        image_mask = self._processor.get_image_mask(batch)
+        image_mask = self._processor.get_image_mask(batch_original)
         patch_tensor = output[0][image_mask[0]].detach().cpu()
 
         bboxes = self._build_bboxes(image=image, patch_count=len(patch_tensor))

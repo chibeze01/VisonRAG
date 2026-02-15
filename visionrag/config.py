@@ -35,6 +35,10 @@ class Settings:
     model_name: str
     model_version: str
     model_device: str
+    azure_openai_endpoint: str | None
+    azure_openai_api_key: str | None
+    azure_openai_api_version: str
+    azure_openai_deployment: str | None
     gemini_api_key: str | None
     gemini_model: str
     worker_poll_interval_seconds: int
@@ -67,6 +71,10 @@ class Settings:
             model_name=_env("COLPALI_MODEL_NAME", "vidore/colqwen2-v1.0") or "vidore/colqwen2-v1.0",
             model_version=_env("COLPALI_MODEL_VERSION", "v1") or "v1",
             model_device=_env("COLPALI_DEVICE", "cpu") or "cpu",
+            azure_openai_endpoint=_env("AZURE_OPENAI_ENDPOINT"),
+            azure_openai_api_key=_env("AZURE_OPENAI_API_KEY"),
+            azure_openai_api_version=_env("AZURE_OPENAI_API_VERSION", "2024-10-21") or "2024-10-21",
+            azure_openai_deployment=_env("AZURE_OPENAI_DEPLOYMENT"),
             gemini_api_key=_env("GEMINI_API_KEY"),
             gemini_model=_env("GEMINI_MODEL", "gemini-2.0-flash") or "gemini-2.0-flash",
             worker_poll_interval_seconds=_env_int("WORKER_POLL_INTERVAL_SECONDS", 3),
@@ -83,4 +91,3 @@ class Settings:
             log_level=_env("LOG_LEVEL", "INFO") or "INFO",
             metrics_enabled=_env_bool("METRICS_ENABLED", True),
         )
-

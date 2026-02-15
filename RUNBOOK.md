@@ -10,9 +10,11 @@ pip install -r requirements.txt
 
 Copy `.env.example` to `.env` and set:
 - `POSTGRES_DSN`
-- `DEFAULT_S3_BUCKET` (or pass per request)
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (required for S3 access)
 - `AWS_REGION`
-- `GEMINI_API_KEY` (optional for retrieval-only mode)
+- `DEFAULT_S3_BUCKET` (or pass per request)
+- `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_DEPLOYMENT` for Azure answer generation
+- `GEMINI_API_KEY` (optional fallback if Azure fails, or primary if Azure is not configured)
 
 ## 3. Apply database migrations
 
@@ -51,4 +53,3 @@ curl -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
   -d "{\"query\":\"What does the revenue chart show?\",\"generate_answer\":true}"
 ```
-

@@ -4,6 +4,7 @@ psycopg[binary]
 boto3
 PyMuPDF
 google-genai
+openai
 Pillow
 python-dotenv
 colpali-engine

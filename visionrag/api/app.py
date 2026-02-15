@@ -18,7 +18,7 @@ from visionrag.config import Settings
 from visionrag.db.repository import StorageRepository
 from visionrag.logging_utils import configure_logging
 from visionrag.metrics import InMemoryMetrics
-from visionrag.providers.answer_generator import GeminiAnswerGenerator
+from visionrag.providers.answer_generator import create_answer_generator
 from visionrag.providers.embedding import ColPaliEmbeddingProvider
 from visionrag.providers.page_resolver import PageResolver
 from visionrag.providers.s3_client import S3Client
@@ -36,9 +36,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     page_resolver = PageResolver(s3_client=s3_client, dpi=cfg.render_dpi)
     embedding_provider = ColPaliEmbeddingProvider(model_name=cfg.model_name, device=cfg.model_device)
     metrics = InMemoryMetrics()
-    answer_generator = None
-    if cfg.gemini_api_key:
-        answer_generator = GeminiAnswerGenerator(api_key=cfg.gemini_api_key, model=cfg.gemini_model)
+    answer_generator = create_answer_generator(cfg)
 
     query_service = QueryService(
         settings=cfg,
