@@ -82,6 +82,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             s3_key=payload.s3_key,
             document_id=payload.document_id,
             status="pending",
+            force=payload.force,
         )
         job = repository.create_ingestion_job(doc.document_id)
         return DocumentIngestResponse(job_id=job.job_id, document_id=doc.document_id, status=job.status)

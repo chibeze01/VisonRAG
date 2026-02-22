@@ -54,6 +54,11 @@ class Settings:
     render_dpi: int
     log_level: str
     metrics_enabled: bool
+    # Light-ColPali token merging (https://arxiv.org/pdf/2506.04997)
+    light_merge_enabled: bool
+    light_merge_factor: int
+    light_merge_min_clusters: int
+    light_merge_bbox_density_percentile: float
 
     @classmethod
     def from_env(cls, load_env: bool = True) -> "Settings":
@@ -90,4 +95,10 @@ class Settings:
             render_dpi=_env_int("RENDER_DPI", 200),
             log_level=_env("LOG_LEVEL", "INFO") or "INFO",
             metrics_enabled=_env_bool("METRICS_ENABLED", True),
+            light_merge_enabled=_env_bool("LIGHT_MERGE_ENABLED", False),
+            light_merge_factor=_env_int("LIGHT_MERGE_FACTOR", 9),
+            light_merge_min_clusters=_env_int("LIGHT_MERGE_MIN_CLUSTERS", 32),
+            light_merge_bbox_density_percentile=float(
+                _env("LIGHT_MERGE_BBOX_DENSITY_PERCENTILE", "0.75") or "0.75"
+            ),
         )

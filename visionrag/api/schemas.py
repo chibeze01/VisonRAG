@@ -10,6 +10,7 @@ class DocumentIngestRequest(BaseModel):
     s3_bucket: str | None = None
     s3_key: str
     document_id: UUID | None = None
+    force: bool = False
 
 
 class DocumentIngestResponse(BaseModel):

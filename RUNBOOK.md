@@ -9,6 +9,7 @@ pip install -r requirements.txt
 ## 2. Configure environment
 
 Copy `.env.example` to `.env` and set:
+
 - `POSTGRES_DSN`
 - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (required for S3 access)
 - `AWS_REGION`
@@ -38,18 +39,48 @@ python run_worker.py
 
 ## 5. Example API usage
 
-Queue a document:
+Queue a document (bash):
 
 ```bash
 curl -X POST http://localhost:8000/v1/documents \
   -H "Content-Type: application/json" \
-  -d "{\"s3_bucket\":\"my-bucket\",\"s3_key\":\"docs/my.pdf\"}"
+  -d '{"s3_bucket":"my-bucket","s3_key":"docs/my.pdf"}'
 ```
 
-Query:
+Queue a document (PowerShell):
+
+```powershell
+curl -X POST http://localhost:8000/v1/documents `
+  -H "Content-Type: application/json" `
+  -d '{"s3_bucket":"my-bucket","s3_key":"docs/my.pdf"}'
+```
+
+Force re-ingestion (reprocess even if the file hasn't changed):
+
+```bash
+curl -X POST http://localhost:8000/v1/documents \
+  -H "Content-Type: application/json" \
+  -d '{"s3_bucket":"my-bucket","s3_key":"docs/my.pdf","force":true}'
+```
+
+```powershell
+curl -X POST http://localhost:8000/v1/documents `
+  -H "Content-Type: application/json" `
+  -d '{"s3_bucket":"my-bucket","s3_key":"docs/my.pdf","force":true}'
+```
+
+Query (bash):
 
 ```bash
 curl -X POST http://localhost:8000/v1/query \
   -H "Content-Type: application/json" \
-  -d "{\"query\":\"What does the revenue chart show?\",\"generate_answer\":true}"
+  -d '{"query":"What does the revenue chart show?","generate_answer":true}'
+```
+
+Query (PowerShell):
+
+```powershell
+curl -X POST http://localhost:8000/v1/query `
+  -H "Content-Type: application/json" `
+  -d '{"query":"What does the revenue chart show?","generate_answer":true}'
 ```

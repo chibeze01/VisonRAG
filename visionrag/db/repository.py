@@ -38,19 +38,33 @@ class StorageRepository:
         s3_key: str,
         document_id: UUID | None = None,
         status: str = "pending",
+        force: bool = False,
     ) -> DocumentRecord:
         doc_id = document_id or uuid4()
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO documents (document_id, s3_bucket, s3_key, status)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (s3_bucket, s3_key)
-                DO UPDATE SET updated_at = NOW(), status = EXCLUDED.status
-                RETURNING document_id, s3_bucket, s3_key, source_etag, status, page_count
-                """,
-                (doc_id, s3_bucket, s3_key, status),
-            )
+            if force:
+                # Clear source_etag to bypass the worker's etag check and force re-ingestion
+                cur.execute(
+                    """
+                    INSERT INTO documents (document_id, s3_bucket, s3_key, status, source_etag)
+                    VALUES (%s, %s, %s, %s, NULL)
+                    ON CONFLICT (s3_bucket, s3_key)
+                    DO UPDATE SET updated_at = NOW(), status = EXCLUDED.status, source_etag = NULL
+                    RETURNING document_id, s3_bucket, s3_key, source_etag, status, page_count
+                    """,
+                    (doc_id, s3_bucket, s3_key, status),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO documents (document_id, s3_bucket, s3_key, status)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (s3_bucket, s3_key)
+                    DO UPDATE SET updated_at = NOW(), status = EXCLUDED.status
+                    RETURNING document_id, s3_bucket, s3_key, source_etag, status, page_count
+                    """,
+                    (doc_id, s3_bucket, s3_key, status),
+                )
             row = cur.fetchone()
             conn.commit()
         return DocumentRecord(
