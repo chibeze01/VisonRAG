@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional, Protocol
@@ -12,6 +13,8 @@ from PIL import Image
 
 from visionrag.Light_merge import LightMerger
 from visionrag.types import PatchBBox, PatchEmbedding
+
+logger = logging.getLogger(__name__)
 
 
 def _dense_bbox(bboxes: list[PatchBBox], density_percentile: float) -> PatchBBox:
@@ -159,10 +162,24 @@ class ColPaliEmbeddingProvider:
             output = self._model(**batch)
         image_mask = self._processor.get_image_mask(batch_original)
         patch_tensor = output[0][image_mask[0]].detach().cpu()
+        raw_patch_count = len(patch_tensor)
 
         if self.merger is not None:
-            return self._embed_merged(image, page_number, patch_tensor)
-        return self._embed_raw(image, page_number, patch_tensor)
+            rows = self._embed_merged(image, page_number, patch_tensor)
+        else:
+            rows = self._embed_raw(image, page_number, patch_tensor)
+
+        merged_patch_count = len(rows)
+        merge_ratio = (merged_patch_count / raw_patch_count) if raw_patch_count else 0.0
+        logger.info(
+            "Embedded page=%s raw_patch_count=%s merged_patch_count=%s merge_ratio=%.4f merge_enabled=%s",
+            page_number,
+            raw_patch_count,
+            merged_patch_count,
+            merge_ratio,
+            self.merger is not None,
+        )
+        return rows
 
     def _embed_raw(
         self, image: Image.Image, page_number: int, patch_tensor: "torch.Tensor"
