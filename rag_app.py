@@ -1,91 +1,66 @@
-import os
-import io
-import base64
-from dotenv import load_dotenv
-from google import genai
-from byaldi import RAGMultiModalModel
-from PIL import Image
+from __future__ import annotations
 
-# Load environment variables from .env if it exists
-load_dotenv()
+from visionrag.config import Settings
+from visionrag.db.repository import StorageRepository
+from visionrag.logging_utils import configure_logging
+from visionrag.metrics import InMemoryMetrics
+from visionrag.providers.answer_generator import create_answer_generator
+from visionrag.providers.embedding import ColPaliEmbeddingProvider
+from visionrag.providers.page_resolver import PageResolver
+from visionrag.providers.s3_client import S3Client
+from visionrag.services.query_service import QueryRequest, QueryService
 
-# --- CONFIGURATION ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GOOGLE_API_KEY":
-    print("Error: GEMINI_API_KEY not found or not set in .env file.")
-    print("Please create a .env file with your GEMINI_API_KEY.")
-    # Exit or handle as needed
-    import sys
-    sys.exit(1)
+def main() -> None:
+    settings = Settings.from_env()
+    configure_logging(settings.log_level)
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+    repository = StorageRepository(settings.postgres_dsn)
+    s3_client = S3Client(region_name=settings.aws_region)
+    page_resolver = PageResolver(s3_client=s3_client, dpi=settings.render_dpi)
+    embedding_provider = ColPaliEmbeddingProvider(model_name=settings.model_name, device=settings.model_device)
+    metrics = InMemoryMetrics()
 
-# 1. Load the Index
-index_name = "vision_rag_index"
-if not os.path.exists(os.path.join(".byaldi", index_name)):
-    print(f"Error: Index '{index_name}' not found. Please run index_pdf.py first.")
-    import sys
-    sys.exit(1)
+    answer_generator = create_answer_generator(settings)
 
-print(f"Loading Index '{index_name}'...")
-RAG = RAGMultiModalModel.from_index(index_name, device="cpu")
-
-# 2. Define the Search Function
-def visual_search(query_text, k=1):
-    print(f"Searching for: {query_text}")
-    results = RAG.search(query_text, k=k)
-    
-    if not results:
-        return None, None
-
-    # For this prototype, we'll take the top result
-    result_item = results[0]
-    base64_image = result_item.base64
-    page_num = result_item.page_num
-    
-    # Decode to PIL Image
-    image_data = base64.b64decode(base64_image)
-    image = Image.open(io.BytesIO(image_data))
-    
-    return image, page_num
-
-# 3. Define the Generation Function
-def ask_gemini(image, question):
-    print("Asking Gemini to analyze the retrieved page...")
-    
-    # Send image + question using the new google-genai API
-    response = client.models.generate_content(
-        model='gemini-2.0-flash',
-        contents=[
-            "You are an expert technical assistant. Look at this document page and answer the question based ONLY on the provided image.",
-            image,
-            f"Question: {question}"
-        ]
+    query_service = QueryService(
+        settings=settings,
+        repository=repository,
+        embedding_provider=embedding_provider,
+        page_resolver=page_resolver,
+        answer_generator=answer_generator,
+        metrics=metrics,
     )
-    return response.text
 
-def main():
     while True:
-        user_query = input("\nEnter your question (or 'quit' to exit): ")
-        if user_query.lower() in ['quit', 'exit', 'q']:
+        user_query = input("\nEnter your question (or 'quit' to exit): ").strip()
+        if user_query.lower() in {"quit", "exit", "q"}:
             break
-            
-        retrieved_image, page_num = visual_search(user_query)
-        
-        # save the retrived image
-        retrieved_image.save("retrieved_image.png")
 
-        if retrieved_image:
-            print(f"Found relevant info on Page {page_num}. Analyzing...")
-            # Optional: Display the image if in a notebook or GUI environment
-            # retrieved_image.show() 
-            
-            answer = ask_gemini(retrieved_image, user_query)
+        response = query_service.query(
+            QueryRequest(
+                query=user_query,
+                top_k_patches=settings.query_default_top_k_patches,
+                top_k_pages=settings.query_default_top_k_pages,
+                generate_answer=bool(answer_generator),
+            )
+        )
+
+        if not response.pages:
+            print("No relevant pages found.")
+            continue
+
+        print("\nTop evidence pages:")
+        for page in response.pages:
+            print(
+                f"- document_id={page.document_id} s3={page.s3_bucket}/{page.s3_key} "
+                f"page={page.page_number} score={page.score:.4f}"
+            )
+
+        if response.answer:
             print("\n--- ANSWER ---")
-            print(answer)
-        else:
-            print("No relevant info found in the document.")
+            print(response.answer)
+
 
 if __name__ == "__main__":
     main()

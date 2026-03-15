@@ -1,17 +1,18 @@
-import os
-from pdf2image import convert_from_path
+from __future__ import annotations
+
+from pathlib import Path
 
 
-def convert_pdfs_to_images(pdf_folder):
-    pdf_files = [f for f in os.listdir(pdf_folder) if f.endswith('.pdf')]
-    all_images = {}
-    if len(pdf_files) == 0 :
-        print("There is no pdf Fils in the dir: ",pdf_folder)
-    for doc_id, pdf_file in enumerate(pdf_files):
-        pdf_path = os.path.join(pdf_folder, pdf_file)
-        images = convert_from_path(pdf_path)
-        all_images[doc_id] = images
+def check_pymupdf(pdf_path: Path) -> None:
+    import fitz
 
-    return all_images
+    with fitz.open(pdf_path) as doc:
+        print(f"Opened {pdf_path.name} with {len(doc)} pages.")
 
-all_images = convert_pdfs_to_images("./")
+
+if __name__ == "__main__":
+    sample = Path("sample.pdf")
+    if not sample.exists():
+        print("sample.pdf not found.")
+    else:
+        check_pymupdf(sample)
